@@ -5,7 +5,7 @@ const Download = require('../models/Download');
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID,
   clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
-  redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:5000/callback'
+  redirectUri: process.env.SPOTIFY_REDIRECT_URI || 'https://your-domain.com/api/auth/spotify/callback'
 });
 
 // Refresh the access token periodically
@@ -21,6 +21,57 @@ const refreshSpotifyToken = async () => {
     console.error('Error refreshing Spotify token:', error);
     // Try again in 30 seconds
     setTimeout(refreshSpotifyToken, 30000);
+  }
+};
+
+// Handle Spotify OAuth callback
+const handleAuthCallback = async (code) => {
+  try {
+    const data = await spotifyApi.authorizationCodeGrant(code);
+    
+    const accessToken = data.body['access_token'];
+    const refreshToken = data.body['refresh_token'];
+    const expiresIn = data.body['expires_in'];
+
+    // Set tokens
+    spotifyApi.setAccessToken(accessToken);
+    spotifyApi.setRefreshToken(refreshToken);
+
+    // Schedule token refresh
+    setTimeout(() => {
+      refreshAccessToken(refreshToken);
+    }, (expiresIn - 60) * 1000);
+
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn
+    };
+  } catch (error) {
+    console.error('Error in Spotify auth callback:', error);
+    throw new Error('Failed to authenticate with Spotify');
+  }
+};
+
+// Refresh access token using refresh token
+const refreshAccessToken = async (refreshToken) => {
+  try {
+    spotifyApi.setRefreshToken(refreshToken);
+    const data = await spotifyApi.refreshAccessToken();
+    const accessToken = data.body['access_token'];
+    const expiresIn = data.body['expires_in'];
+
+    spotifyApi.setAccessToken(accessToken);
+
+    // Schedule next refresh
+    setTimeout(() => {
+      refreshAccessToken(refreshToken);
+    }, (expiresIn - 60) * 1000);
+
+    return accessToken;
+  } catch (error) {
+    console.error('Error refreshing access token:', error);
+    throw error;
   }
 };
 
@@ -160,5 +211,7 @@ module.exports = {
   validateSpotifyUrl,
   getTrackInfo,
   getPlaylistInfo,
-  createDownloadRecord
+  createDownloadRecord,
+  handleAuthCallback,
+  refreshAccessToken
 };
