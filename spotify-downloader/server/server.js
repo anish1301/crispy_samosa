@@ -8,6 +8,7 @@ const socketIo = require('socket.io');
 const spotifyRoutes = require('./routes/spotifyRoutes');
 const downloadRoutes = require('./routes/downloadRoutes');
 const errorHandler = require('./middleware/errorHandler');
+const { apiLimiter, downloadLimiter } = require('./middleware/rateLimiter');
 const CleanupService = require('./services/cleanupService');
 const { createRequiredDirectories } = require('./utils/fileUtils');
 const { initializeDirectories } = require('./utils/fileUtils');
@@ -31,6 +32,10 @@ app.set('io', io);
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply rate limiting
+app.use('/api/', apiLimiter); // Apply general rate limiting to all API routes
+app.use('/api/download', downloadLimiter); // Apply stricter rate limiting to download routes
 
 // Serve static files from the downloads directory
 app.use('/downloads', express.static(path.join(__dirname, 'downloads')));
